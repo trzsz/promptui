@@ -18,6 +18,9 @@ import (
 // SelectWithAdd's logic.
 const SelectedAdd = -1
 
+// KeyRefresh indicates to refresh the current status
+const KeyRefresh = '\x01'
+
 // Select represents a list of items used to enable selections, they can be used as search engines, menus
 // or as a list of items in a cli based prompt.
 type Select struct {
@@ -288,6 +291,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			s.list.PageUp()
 		case key == s.Keys.PageDown.Code || (key == 'l' && !searchMode):
 			s.list.PageDown()
+		case key == KeyRefresh:
+			break
 		default:
 			if canSearch && searchMode {
 				cur.Update(string(line))
@@ -405,6 +410,12 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 // ScrollPosition returns the current scroll position.
 func (s *Select) ScrollPosition() int {
 	return s.list.Start()
+}
+
+// GetCurrentIndex returns the index of the item currently selected inside the searched list.
+// If no item is selected, the NotFound (-1) index is returned.
+func (s *Select) GetCurrentIndex() int {
+	return s.list.Index()
 }
 
 func (s *Select) prepareTemplates() error {
