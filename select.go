@@ -82,6 +82,9 @@ type Select struct {
 	Stdin  io.ReadCloser
 	Stdout io.WriteCloser
 
+	// Shortcuts are the shortcuts to display on the top.
+	Shortcuts []string
+
 	// keywords for search
 	keywords string
 }
@@ -169,6 +172,9 @@ type SelectTemplates struct {
 	// it shows keys for movement and search.
 	Help string
 
+	// Shortcuts is a text/template for displayin shortcuts on the top.
+	Shortcuts string
+
 	// SearchTips is a text/template for displaying search tips while search having results.
 	SearchTips string
 
@@ -188,6 +194,7 @@ type SelectTemplates struct {
 	selected   *template.Template
 	details    *template.Template
 	help       *template.Template
+	shortcuts  *template.Template
 	searchTips *template.Template
 	keywords   *template.Template
 }
@@ -333,6 +340,10 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 				cur.Update(string(line))
 				s.list.Search(s.getKeywords(cur.Get()))
 			}
+		}
+
+		for _, shortcut := range s.Shortcuts {
+			sb.Write(render(s.Templates.shortcuts, shortcut))
 		}
 
 		if searchMode {
@@ -545,6 +556,15 @@ func (s *Select) prepareTemplates() error {
 	}
 
 	tpls.help = tpl
+
+	if tpls.Shortcuts == "" {
+		tpls.Shortcuts = `{{ . | faint }}`
+	}
+	tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.Shortcuts)
+	if err != nil {
+		return err
+	}
+	tpls.shortcuts = tpl
 
 	if tpls.SearchTips == "" {
 		tpls.SearchTips = `{{ "     Enter to lock the search results" | faint }}`
