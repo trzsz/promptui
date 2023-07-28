@@ -201,6 +201,10 @@ func (l *List) CanPageUp() bool {
 // Index returns the index of the item currently selected inside the searched list. If no item is selected,
 // the NotFound (-1) index is returned.
 func (l *List) Index() int {
+	if l.cursor >= len(l.scope) {
+		return NotFound
+	}
+
 	selected := l.scope[l.cursor]
 
 	for i, item := range l.items {
@@ -234,4 +238,9 @@ func (l *List) Items() ([]interface{}, int) {
 	}
 
 	return result, active
+}
+
+// VisibleSize returns the size of the current visible items.
+func (l *List) VisibleSize() int {
+	return len(l.scope)
 }

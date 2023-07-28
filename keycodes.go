@@ -27,3 +27,14 @@ var (
 	KeyForward        rune = readline.CharForward
 	KeyForwardDisplay      = "→"
 )
+
+const (
+	// KeyRefresh is the key to refresh the current status
+	KeyRefresh = '\x01'
+
+	// KeyCtrlE is the key to erase the search keywords
+	KeyCtrlE = '\x05'
+
+	// KeySoftEnter is the key to lock the search keywords
+	KeySoftEnter = '\x1e'
+)
