@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"text/tabwriter"
 	"text/template"
 
@@ -17,9 +18,6 @@ import (
 // Since -1 is not a possible selected index, this ensure that add mode is always unique inside
 // SelectWithAdd's logic.
 const SelectedAdd = -1
-
-// KeyRefresh indicates to refresh the current status
-const KeyRefresh = '\x01'
 
 // Select represents a list of items used to enable selections, they can be used as search engines, menus
 // or as a list of items in a cli based prompt.
@@ -83,6 +81,9 @@ type Select struct {
 
 	Stdin  io.ReadCloser
 	Stdout io.WriteCloser
+
+	// keywords for search
+	keywords string
 }
 
 // SelectKeys defines the available keys used by select mode to enable the user to move around the list
@@ -168,6 +169,12 @@ type SelectTemplates struct {
 	// it shows keys for movement and search.
 	Help string
 
+	// SearchTips is a text/template for displaying search tips while search having results.
+	SearchTips string
+
+	// Keywords is a text/template for the search keywords.
+	Keywords string
+
 	// FuncMap is a map of helper functions that can be used inside of templates according to the text/template
 	// documentation.
 	//
@@ -175,12 +182,14 @@ type SelectTemplates struct {
 	// is overridden, the colors functions must be added in the override from promptui.FuncMap to work.
 	FuncMap template.FuncMap
 
-	label    *template.Template
-	active   *template.Template
-	inactive *template.Template
-	selected *template.Template
-	details  *template.Template
-	help     *template.Template
+	label      *template.Template
+	active     *template.Template
+	inactive   *template.Template
+	selected   *template.Template
+	details    *template.Template
+	help       *template.Template
+	searchTips *template.Template
+	keywords   *template.Template
 }
 
 // SearchPrompt is the prompt displayed in search mode.
@@ -220,6 +229,17 @@ func (s *Select) RunCursorAt(cursorPos, scroll int) (int, string, error) {
 		return 0, "", err
 	}
 	return s.innerRun(cursorPos, scroll, ' ')
+}
+
+func (s *Select) getKeywords(keywords string) string {
+	keywords = strings.Join(strings.Fields(keywords), " ")
+	if keywords == "" {
+		return s.keywords
+	}
+	if s.keywords == "" {
+		return keywords
+	}
+	return s.keywords + " " + keywords
 }
 
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
@@ -272,7 +292,11 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			if searchMode {
 				searchMode = false
 				cur.Replace("")
-				s.list.CancelSearch()
+				if s.keywords == "" {
+					s.list.CancelSearch()
+				} else {
+					s.list.Search(s.keywords)
+				}
 			} else {
 				searchMode = true
 			}
@@ -283,9 +307,11 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 
 			cur.Backspace()
 			if len(cur.Get()) > 0 {
-				s.list.Search(cur.Get())
-			} else {
+				s.list.Search(s.getKeywords(cur.Get()))
+			} else if s.keywords == "" {
 				s.list.CancelSearch()
+			} else {
+				s.list.Search(s.keywords)
 			}
 		case key == s.Keys.PageUp.Code || (key == 'h' && !searchMode):
 			s.list.PageUp()
@@ -293,19 +319,35 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			s.list.PageDown()
 		case key == KeyRefresh:
 			break
+		case canSearch && key == KeyCtrlE && (s.keywords != "" || searchMode):
+			s.keywords = ""
+			searchMode = false
+			cur.Replace("")
+			s.list.CancelSearch()
+		case canSearch && searchMode && key == KeySoftEnter && s.list.VisibleSize() > 0:
+			s.keywords = s.getKeywords(cur.Get())
+			searchMode = false
+			cur.Replace("")
 		default:
 			if canSearch && searchMode {
 				cur.Update(string(line))
-				s.list.Search(cur.Get())
+				s.list.Search(s.getKeywords(cur.Get()))
 			}
 		}
 
 		if searchMode {
 			header := SearchPrompt + cur.Format()
+			if s.list.VisibleSize() > 0 {
+				header += string(render(s.Templates.searchTips, nil))
+			}
 			sb.WriteString(header)
 		} else if !s.HideHelp {
 			help := s.renderHelp(canSearch)
 			sb.Write(help)
+		}
+
+		if s.keywords != "" {
+			sb.Write(render(s.Templates.keywords, s.keywords))
 		}
 
 		label := render(s.Templates.label, s.Label)
@@ -418,6 +460,17 @@ func (s *Select) GetCurrentIndex() int {
 	return s.list.Index()
 }
 
+// GetVisibleSize returns the size of the current visible items.
+func (s *Select) GetVisibleSize() int {
+	return s.list.VisibleSize()
+}
+
+// GetVisibleItems returns the current visible items.
+func (s *Select) GetVisibleItems() []interface{} {
+	items, _ := s.list.Items()
+	return items
+}
+
 func (s *Select) prepareTemplates() error {
 	tpls := s.Templates
 	if tpls == nil {
@@ -492,6 +545,24 @@ func (s *Select) prepareTemplates() error {
 	}
 
 	tpls.help = tpl
+
+	if tpls.SearchTips == "" {
+		tpls.SearchTips = `{{ "     Enter to lock the search results" | faint }}`
+	}
+	tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.SearchTips)
+	if err != nil {
+		return err
+	}
+	tpls.searchTips = tpl
+
+	if tpls.Keywords == "" {
+		tpls.Keywords = `Keywords: {{ . | blue }} {{ "     Ctrl+E to erase the search keywords" | faint }}`
+	}
+	tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.Keywords)
+	if err != nil {
+		return err
+	}
+	tpls.keywords = tpl
 
 	s.Templates = tpls
 
