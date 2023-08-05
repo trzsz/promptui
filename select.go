@@ -85,8 +85,8 @@ type Select struct {
 	// Shortcuts are the shortcuts to display on the top.
 	Shortcuts []string
 
-	// keywords for search
-	keywords string
+	// Keywords for search
+	Keywords string
 }
 
 // SelectKeys defines the available keys used by select mode to enable the user to move around the list
@@ -244,12 +244,12 @@ func (s *Select) RunCursorAt(cursorPos, scroll int) (int, string, error) {
 func (s *Select) getKeywords(keywords string) string {
 	keywords = strings.Join(strings.Fields(keywords), " ")
 	if keywords == "" {
-		return s.keywords
+		return s.Keywords
 	}
-	if s.keywords == "" {
+	if s.Keywords == "" {
 		return keywords
 	}
-	return s.keywords + " " + keywords
+	return s.Keywords + " " + keywords
 }
 
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
@@ -285,6 +285,9 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 	searchMode := s.StartInSearchMode
 	s.list.SetCursor(cursorPos)
 	s.list.SetStart(scroll)
+	if s.Keywords != "" {
+		s.list.Search(s.Keywords)
+	}
 
 	c.SetListener(func(line []rune, pos int, key rune) ([]rune, int, bool) {
 		switch {
@@ -302,10 +305,10 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			if searchMode {
 				searchMode = false
 				cur.Replace("")
-				if s.keywords == "" {
+				if s.Keywords == "" {
 					s.list.CancelSearch()
 				} else {
-					s.list.Search(s.keywords)
+					s.list.Search(s.Keywords)
 				}
 			} else {
 				searchMode = true
@@ -318,10 +321,10 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			cur.Backspace()
 			if len(cur.Get()) > 0 {
 				s.list.Search(s.getKeywords(cur.Get()))
-			} else if s.keywords == "" {
+			} else if s.Keywords == "" {
 				s.list.CancelSearch()
 			} else {
-				s.list.Search(s.keywords)
+				s.list.Search(s.Keywords)
 			}
 		case key == s.Keys.PageUp.Code || (key == 'h' && !searchMode):
 			s.list.PageUp()
@@ -329,13 +332,13 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			s.list.PageDown()
 		case key == KeyRefresh:
 			break
-		case canSearch && key == KeyCtrlE && (s.keywords != "" || searchMode):
-			s.keywords = ""
+		case canSearch && key == KeyCtrlE && (s.Keywords != "" || searchMode):
+			s.Keywords = ""
 			searchMode = false
 			cur.Replace("")
 			s.list.CancelSearch()
 		case canSearch && searchMode && key == KeySoftEnter && s.list.VisibleSize() > 0:
-			s.keywords = s.getKeywords(cur.Get())
+			s.Keywords = s.getKeywords(cur.Get())
 			searchMode = false
 			cur.Replace("")
 		default:
@@ -360,8 +363,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			sb.Write(help)
 		}
 
-		if s.keywords != "" {
-			sb.Write(render(s.Templates.keywords, s.keywords))
+		if s.Keywords != "" {
+			sb.Write(render(s.Templates.keywords, s.Keywords))
 		}
 
 		label := render(s.Templates.label, s.Label)
