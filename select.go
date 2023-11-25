@@ -373,6 +373,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 		items, idx := s.list.Items()
 		last := len(items) - 1
 
+		var buf bytes.Buffer
+		w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 		for i, item := range items {
 			page := " "
 
@@ -397,7 +399,12 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 				output = append(output, render(s.Templates.inactive, item)...)
 			}
 
-			sb.Write(output)
+			w.Write(output)
+			w.Write([]byte("\n"))
+		}
+		w.Flush()
+		for _, d := range bytes.Split(buf.Bytes(), []byte("\n")) {
+			sb.Write(d)
 		}
 
 		if idx == list.NotFound {
@@ -696,7 +703,7 @@ func (s *Select) renderDetails(item interface{}) [][]byte {
 
 	var buf bytes.Buffer
 
-	w := tabwriter.NewWriter(&buf, 0, 0, 8, ' ', 0)
+	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
 
 	err := s.Templates.details.Execute(w, item)
 	if err != nil {
