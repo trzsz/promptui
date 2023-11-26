@@ -149,3 +149,8 @@ func (s *ScreenBuf) Flush() error {
 func (s *ScreenBuf) WriteString(str string) (int, error) {
 	return s.Write([]byte(str))
 }
+
+// WriteEscapeCode write VT100 escape code without newline
+func (s *ScreenBuf) WriteEscapeCode(code []byte) (int, error) {
+	return s.buf.Write(code)
+}

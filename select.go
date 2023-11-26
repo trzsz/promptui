@@ -348,6 +348,8 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			}
 		}
 
+		sb.WriteEscapeCode([]byte("\x1b[?7l"))
+
 		for _, shortcut := range s.Shortcuts {
 			sb.Write(render(s.Templates.shortcuts, shortcut))
 		}
@@ -419,6 +421,7 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			}
 		}
 
+		sb.WriteEscapeCode([]byte("\x1b[?7h"))
 		sb.Flush()
 
 		return nil, 0, true
