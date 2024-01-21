@@ -65,6 +65,7 @@ const (
 // The functions inside the map link the state, color and background colors strings detected in templates to a Styler
 // function that applies the given style using the corresponding constant.
 var FuncMap = template.FuncMap{
+	"default":   Styler(reset),
 	"black":     Styler(FGBlack),
 	"red":       Styler(FGRed),
 	"green":     Styler(FGGreen),

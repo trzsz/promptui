@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"text/tabwriter"
 	"text/template"
 
 	"github.com/chzyer/readline"
@@ -184,6 +183,15 @@ type SelectTemplates struct {
 	// Keywords is a text/template for the search keywords.
 	Keywords string
 
+	// HideLabel sets whether to hide the label.
+	HideLabel bool
+
+	// ItemsRenderer is a custom rendering visible items function.
+	ItemsRenderer func(items []interface{}, idx int) string
+
+	// DetailsRenderer is a custom rendering active item function.
+	DetailsRenderer func(item interface{}) string
+
 	// FuncMap is a map of helper functions that can be used inside of templates according to the text/template
 	// documentation.
 	//
@@ -250,6 +258,44 @@ func (s *Select) getKeywords(keywords string) string {
 		return keywords
 	}
 	return s.Keywords + " " + keywords
+}
+
+func (s *Select) renderItems(items []interface{}, idx int, top rune) []byte {
+	last := len(items) - 1
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf, 0, 0, 2, ' ', 0)
+	for i, item := range items {
+		page := " "
+
+		switch i {
+		case 0:
+			if s.list.CanPageUp() {
+				page = "↑"
+			} else {
+				page = string(top)
+			}
+		case last:
+			if s.list.CanPageDown() {
+				page = "↓"
+			}
+		}
+
+		output := []byte(page + " ")
+
+		if i == idx {
+			output = append(output, render(s.Templates.active, item)...)
+		} else {
+			output = append(output, render(s.Templates.inactive, item)...)
+		}
+
+		w.Write(output)
+		if i != last {
+			w.Write([]byte("\n"))
+		}
+	}
+	w.Flush()
+	return buf.Bytes()
 }
 
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
@@ -369,44 +415,16 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			sb.Write(render(s.Templates.keywords, s.Keywords))
 		}
 
-		label := render(s.Templates.label, s.Label)
-		sb.Write(label)
+		if !s.Templates.HideLabel {
+			label := render(s.Templates.label, s.Label)
+			sb.WriteLines(label)
+		}
 
 		items, idx := s.list.Items()
-		last := len(items) - 1
-
-		var buf bytes.Buffer
-		w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-		for i, item := range items {
-			page := " "
-
-			switch i {
-			case 0:
-				if s.list.CanPageUp() {
-					page = "↑"
-				} else {
-					page = string(top)
-				}
-			case last:
-				if s.list.CanPageDown() {
-					page = "↓"
-				}
-			}
-
-			output := []byte(page + " ")
-
-			if i == idx {
-				output = append(output, render(s.Templates.active, item)...)
-			} else {
-				output = append(output, render(s.Templates.inactive, item)...)
-			}
-
-			w.Write(output)
-			w.Write([]byte("\n"))
-		}
-		w.Flush()
-		for _, d := range bytes.Split(buf.Bytes(), []byte("\n")) {
-			sb.Write(d)
+		if s.Templates.ItemsRenderer != nil {
+			sb.WriteLines([]byte(s.Templates.ItemsRenderer(items, idx)))
+		} else {
+			sb.WriteLines(s.renderItems(items, idx, top))
 		}
 
 		if idx == list.NotFound {
@@ -414,10 +432,10 @@ func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) 
 			sb.WriteString("No results")
 		} else {
 			active := items[idx]
-
-			details := s.renderDetails(active)
-			for _, d := range details {
-				sb.Write(d)
+			if s.Templates.DetailsRenderer != nil {
+				sb.WriteLines([]byte(s.Templates.DetailsRenderer(active)))
+			} else {
+				sb.WriteLines(s.renderDetails(active))
 			}
 		}
 
@@ -508,22 +526,24 @@ func (s *Select) prepareTemplates() error {
 		tpls.FuncMap = FuncMap
 	}
 
-	if tpls.Label == "" {
-		tpls.Label = fmt.Sprintf("%s {{.}}: ", IconInitial)
-	}
+	if !tpls.HideLabel {
+		if tpls.Label == "" {
+			tpls.Label = fmt.Sprintf("%s {{.}}: ", IconInitial)
+		}
 
-	tpl, err := template.New("").Funcs(tpls.FuncMap).Parse(tpls.Label)
-	if err != nil {
-		return err
-	}
+		tpl, err := template.New("").Funcs(tpls.FuncMap).Parse(tpls.Label)
+		if err != nil {
+			return err
+		}
 
-	tpls.label = tpl
+		tpls.label = tpl
+	}
 
 	if tpls.Active == "" {
 		tpls.Active = fmt.Sprintf("%s {{ . | underline }}", IconSelect)
 	}
 
-	tpl, err = template.New("").Funcs(tpls.FuncMap).Parse(tpls.Active)
+	tpl, err := template.New("").Funcs(tpls.FuncMap).Parse(tpls.Active)
 	if err != nil {
 		return err
 	}
@@ -699,14 +719,14 @@ func (s *Select) setKeys() {
 	}
 }
 
-func (s *Select) renderDetails(item interface{}) [][]byte {
+func (s *Select) renderDetails(item interface{}) []byte {
 	if s.Templates.details == nil {
 		return nil
 	}
 
 	var buf bytes.Buffer
 
-	w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
+	w := NewWriter(&buf, 0, 0, 2, ' ', 0)
 
 	err := s.Templates.details.Execute(w, item)
 	if err != nil {
@@ -714,10 +734,7 @@ func (s *Select) renderDetails(item interface{}) [][]byte {
 	}
 
 	w.Flush()
-
-	output := buf.Bytes()
-
-	return bytes.Split(output, []byte("\n"))
+	return buf.Bytes()
 }
 
 func (s *Select) renderHelp(b bool) []byte {

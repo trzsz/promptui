@@ -110,6 +110,19 @@ func (s *ScreenBuf) Write(b []byte) (int, error) {
 	}
 }
 
+// WriteLines writes multiple lines to the underlining buffer.
+func (s *ScreenBuf) WriteLines(b []byte) (int, error) {
+	total := 0
+	for _, d := range bytes.Split(b, []byte("\n")) {
+		n, err := s.Write(d)
+		if err != nil {
+			return total + n, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
 // Flush writes any buffered data to the underlying io.Writer, ensuring that any pending data is displayed.
 func (s *ScreenBuf) Flush() error {
 	for i := s.cursor; i < s.height; i++ {
