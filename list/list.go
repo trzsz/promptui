@@ -182,6 +182,9 @@ func (l *List) PageDown() {
 
 	if cursor == l.cursor {
 		l.cursor = len(l.scope) - 1
+		if l.cursor < 0 {
+			l.cursor = 0
+		}
 	} else if cursor > l.cursor {
 		l.cursor = cursor
 	}
