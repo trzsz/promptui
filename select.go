@@ -300,8 +300,9 @@ func (s *Select) renderItems(items []interface{}, idx int, top rune) []byte {
 
 func (s *Select) innerRun(cursorPos, scroll int, top rune) (int, string, error) {
 	c := &readline.Config{
-		Stdin:  s.Stdin,
-		Stdout: s.Stdout,
+		Stdin:          s.Stdin,
+		Stdout:         s.Stdout,
+		FuncIsTerminal: func() bool { return false },
 	}
 	err := c.Init()
 	if err != nil {
